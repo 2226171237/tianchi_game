@@ -1,5 +1,5 @@
-FROM nvidia/cuda:8.0-cudnn7-devel-centos7 #  基础镜像
-LABEL maintainer "bbp94" #维护者信息
+FROM nvidia/cuda:8.0-cudnn7-devel-centos7
+LABEL maintainer "bbp94"
  
 # 安装bzip2
 RUN yum -y install bzip2
