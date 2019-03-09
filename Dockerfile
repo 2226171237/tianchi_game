@@ -52,5 +52,6 @@ RUN wget "https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh"
 ENV PATH="/root/miniconda3/bin:${PATH}"
 
 #Add Requirement Packages 
+RUN conda install python=3.6
 RUN conda install pytorch torchvision cudatoolkit=8.0 -c pytorch && \
     conda clean -all --yes
