@@ -156,5 +156,5 @@ for filenames, images, tlabels in load_images(input_dir, batch_shape):
         # project step
         sess.run(project_step, feed_dict={x: images, epsilon: demo_epsilon})
     adv = x_hat.eval() # retrieve the adversarial example
-    classify(adv,tlabels)
+    #classify(adv,tlabels)
     save_images(adv,filenames,output_dir)
