@@ -109,7 +109,7 @@ def main(_):
     batch_shape= [FLAGS.batch_size, FLAGS.image_height, FLAGS.image_width, 3]
     batch_size=FLAGS.batch_size
     nb_classes = FLAGS.num_classes
-    
+
     tf.logging.set_verbosity(tf.logging.INFO)
 
     image=tf.Variable(tf.zeros(batch_shape))
@@ -139,7 +139,7 @@ def main(_):
         project_step = tf.assign(x_hat, projected)
 
 
-    demo_epsilon = 8.0/255.0 # 一个很小的扰动
+    demo_epsilon = 32.0/255.0 # 一个很小的扰动
     demo_lr = 1e-1
     demo_steps = 20
 
