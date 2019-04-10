@@ -15,7 +15,7 @@ from scipy.misc import imresize
 from PIL import Image
 import numpy as np
 tf.logging.set_verbosity(tf.logging.ERROR)
-sess=tf.InteractiveSession()
+
 
 tf.flags.DEFINE_string(
     'checkpoint_path', '', 'Path to checkpoint for inception network.')
@@ -102,57 +102,62 @@ class InceptionModel(Model):
     def get_probs(self, x_input):
         return self(x_input)
 
-batch_shape= [FLAGS.batch_size, FLAGS.image_height, FLAGS.image_width, 3]
-batch_size=FLAGS.batch_size
-nb_classes = FLAGS.num_classes
-image=tf.Variable(tf.zeros(batch_shape))
-model=InceptionModel(nb_classes)
-logits,probs=model.get_logits(image),model.get_probs(image)
-saver = tf.train.Saver(slim.get_model_variables())
-saver.restore(sess, FLAGS.checkpoint_path)
+def main(_):
 
-def classify(img,target_class=None):
-    p=sess.run(probs,feed_dict={image:img})
-    result=np.array(p).argmax(axis=1)
-    print('target: ',target_class)
-    print('result: ',result)
+    sess=tf.InteractiveSession()
 
-x = tf.placeholder(tf.float32, batch_shape)
+    batch_shape= [FLAGS.batch_size, FLAGS.image_height, FLAGS.image_width, 3]
+    batch_size=FLAGS.batch_size
+    nb_classes = FLAGS.num_classes
+    
+    tf.logging.set_verbosity(tf.logging.INFO)
 
-x_hat = image # our trainable adversarial input
-assign_op = tf.assign(x_hat, x)
+    image=tf.Variable(tf.zeros(batch_shape))
+    model=InceptionModel(nb_classes)
+    logits,probs=model.get_logits(image),model.get_probs(image)
+    saver = tf.train.Saver(slim.get_model_variables())
+    saver.restore(sess, FLAGS.checkpoint_path)
 
-learning_rate = tf.placeholder(tf.float32, ())
-y_hat = tf.placeholder(tf.int32, (batch_size,))
+    x = tf.placeholder(tf.float32, batch_shape)
 
-labels = tf.one_hot(y_hat, nb_classes)
-loss = tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=[labels])
-optim_step = tf.train.GradientDescentOptimizer(learning_rate).minimize(loss, var_list=[x_hat])
+    x_hat = image # our trainable adversarial input
+    assign_op = tf.assign(x_hat, x)
 
-epsilon = tf.placeholder(tf.float32, ())
+    learning_rate = tf.placeholder(tf.float32, ())
+    y_hat = tf.placeholder(tf.int32, (batch_size,))
 
-below = x - epsilon
-above = x + epsilon
-projected = tf.clip_by_value(tf.clip_by_value(x_hat, below, above), -1, 1)#clip x_hat,并将其约束到0，1之间作为输入。
-with tf.control_dependencies([projected]):#此函数指定某些操作执行的依赖关系，即执行完projected,才能再执行project_step
-    project_step = tf.assign(x_hat, projected)
+    labels = tf.one_hot(y_hat, nb_classes)
+    loss = tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=[labels])
+    optim_step = tf.train.GradientDescentOptimizer(learning_rate).minimize(loss, var_list=[x_hat])
+
+    epsilon = tf.placeholder(tf.float32, ())
+
+    below = x - epsilon
+    above = x + epsilon
+    projected = tf.clip_by_value(tf.clip_by_value(x_hat, below, above), -1, 1)#clip x_hat,并将其约束到0，1之间作为输入。
+    with tf.control_dependencies([projected]):#此函数指定某些操作执行的依赖关系，即执行完projected,才能再执行project_step
+        project_step = tf.assign(x_hat, projected)
 
 
-demo_epsilon = 8.0/255.0 # 一个很小的扰动
-demo_lr = 1e-1
-demo_steps = 20
+    demo_epsilon = 8.0/255.0 # 一个很小的扰动
+    demo_lr = 1e-1
+    demo_steps = 20
 
-for filenames, images, tlabels in load_images(FLAGS.input_dir, batch_shape):
-    # initialization step #先初始化x_hat为x
-    sess.run(assign_op, feed_dict={x: images})
-    # projected gradient descent
-    for i in range(demo_steps):
-        # gradient descent step
-        _, loss_value = sess.run(
-            [optim_step, loss],
-            feed_dict={learning_rate: demo_lr, y_hat: tlabels})
-        # project step
-        sess.run(project_step, feed_dict={x: images, epsilon: demo_epsilon})
-    adv = x_hat.eval() # retrieve the adversarial example
-    #classify(adv,tlabels)
-    save_images(adv,filenames,FLAGS.output_dir)
+    for filenames, images, tlabels in load_images(FLAGS.input_dir, batch_shape):
+        # initialization step #先初始化x_hat为x
+        sess.run(assign_op, feed_dict={x: images})
+        # projected gradient descent
+        for i in range(demo_steps):
+            # gradient descent step
+            _, loss_value = sess.run(
+                [optim_step, loss],
+                feed_dict={learning_rate: demo_lr, y_hat: tlabels})
+            # project step
+            sess.run(project_step, feed_dict={x: images, epsilon: demo_epsilon})
+        adv = x_hat.eval() # retrieve the adversarial example
+        #classify(adv,tlabels)
+        save_images(adv,filenames,FLAGS.output_dir)
+
+if __name__=='__main__':
+    tf.app.run()
+
