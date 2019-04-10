@@ -142,10 +142,7 @@ demo_epsilon = 8.0/255.0 # 一个很小的扰动
 demo_lr = 1e-1
 demo_steps = 20
 
-input_dir=FLAGS.input_dir
-output_dir=FLAGS.output_dir
-
-for filenames, images, tlabels in load_images(input_dir, batch_shape):
+for filenames, images, tlabels in load_images(FLAGS.input_dir, batch_shape):
     # initialization step #先初始化x_hat为x
     sess.run(assign_op, feed_dict={x: images})
     # projected gradient descent
@@ -158,4 +155,4 @@ for filenames, images, tlabels in load_images(input_dir, batch_shape):
         sess.run(project_step, feed_dict={x: images, epsilon: demo_epsilon})
     adv = x_hat.eval() # retrieve the adversarial example
     #classify(adv,tlabels)
-    save_images(adv,filenames,output_dir)
+    save_images(adv,filenames,FLAGS.output_dir)
