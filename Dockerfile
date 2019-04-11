@@ -1,7 +1,7 @@
 # Dockerfile of Example
 # Version 1.0
 # Base Images
-FROM registry.cn-shanghai.aliyuncs.com/aliseccompetition/tensorflow:1.1.0-devel-gpu
+FROM registry.cn-shanghai.aliyuncs.com/aliseccompetition/tensorflow:1.4.0-devel-gpu
 #MAINTAINER
 MAINTAINER AlibabaSec
 
@@ -9,7 +9,7 @@ ADD . /competition
 
 WORKDIR /competition
 RUN pip install --upgrade pip
-RUN pip install --upgrade tensorflow-gpu==1.4.0
+#RUN pip install --upgrade tensorflow-gpu==1.4.0
 RUN pip --no-cache-dir install  -r requirements.txt
 # INSTALL cleverhans foolbox
 
