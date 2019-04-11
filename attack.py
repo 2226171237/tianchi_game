@@ -28,7 +28,7 @@ tf.flags.DEFINE_integer(
 tf.flags.DEFINE_integer(
     'image_height', 224, 'Height of each input images.')
 tf.flags.DEFINE_integer(
-    'batch_size', 16, 'How many images process at one time.')
+    'batch_size', 8, 'How many images process at one time.')
 tf.flags.DEFINE_integer(
     'num_classes', 110, 'Number of Classes')
 FLAGS = tf.flags.FLAGS
@@ -104,7 +104,7 @@ class InceptionModel(Model):
 
 def main(_):
 
-    sess=tf.InteractiveSession()
+    sess=tf.InteractiveSession(config=tf.ConfigProto(allow_soft_placement=True))
 
     batch_shape= [FLAGS.batch_size, FLAGS.image_height, FLAGS.image_width, 3]
     batch_size=FLAGS.batch_size
@@ -127,8 +127,8 @@ def main(_):
     y_hat = tf.placeholder(tf.int32, (batch_size,))
 
     labels = tf.one_hot(y_hat, nb_classes)
-    #对图片进行旋转 每张图生成10张旋转图，求平局的loss
-    num_samples = 10
+    #对图片进行旋转 每张图生成5张旋转图，求平局的loss
+    num_samples = 5
     average_loss = 0
     for i in range(num_samples):
         rotated = tf.contrib.image.rotate(
