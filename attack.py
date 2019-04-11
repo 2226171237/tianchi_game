@@ -28,7 +28,7 @@ tf.flags.DEFINE_integer(
 tf.flags.DEFINE_integer(
     'image_height', 224, 'Height of each input images.')
 tf.flags.DEFINE_integer(
-    'batch_size', 8, 'How many images process at one time.')
+    'batch_size', 16, 'How many images process at one time.')
 tf.flags.DEFINE_integer(
     'num_classes', 110, 'Number of Classes')
 FLAGS = tf.flags.FLAGS
@@ -73,24 +73,26 @@ def save_images(images, filenames, output_dir):
 
 
 #saver=tf.train.import_meta_graph('resnet_v1_50/model.ckpt-49800.meta')
-class InceptionModel(Model):
+#saver=tf.train.import_meta_graph('resnet_v1_50/model.ckpt-49800.meta')
+
+class Resnet(Model):
     """Model class for CleverHans library."""
     def __init__(self, nb_classes):
-        super(InceptionModel, self).__init__(nb_classes=nb_classes,
+        super(Resnet, self).__init__(nb_classes=nb_classes,
                                              needs_dummy_fprop=True)
         self.built = False
 
     def __call__(self, x_input, return_logits=False):
         """Constructs model and return probabilities for given input."""
         reuse = True if self.built else None
-        with slim.arg_scope(inception.inception_v1_arg_scope()):
-            _, end_points = inception.inception_v1(
+        with slim.arg_scope(nets.resnet_v1.resnet_arg_scope()):
+            logits, end_points = nets.resnet_v1.resnet_v1_50(
                 x_input, num_classes=self.nb_classes, is_training=False,
                 reuse=reuse)
         self.built = True
-        self.logits = end_points['Logits']
+        self.logits = logits
         # Strip off the extra reshape op at the output
-        self.probs = end_points['Predictions'].op.inputs[0]
+        self.probs = end_points['predictions'].op.inputs[0]
         if return_logits:
             return self.logits
         else:
@@ -109,34 +111,34 @@ def main(_):
     batch_shape= [FLAGS.batch_size, FLAGS.image_height, FLAGS.image_width, 3]
     batch_size=FLAGS.batch_size
     nb_classes = FLAGS.num_classes
-
+    _R_MEAN = 123.68
+    _G_MEAN = 116.78
+    _B_MEAN = 103.94
     tf.logging.set_verbosity(tf.logging.INFO)
     
     image=tf.Variable(tf.zeros(batch_shape))
-    model=InceptionModel(nb_classes)
-    logits,probs=model.get_logits(image),model.get_probs(image)
-    saver = tf.train.Saver(slim.get_model_variables())
-    saver.restore(sess, FLAGS.checkpoint_path)
-
-    x = tf.placeholder(tf.float32, batch_shape)
+    x = tf.placeholder(tf.float32, (batch_shape))
 
     x_hat = image # our trainable adversarial input
     assign_op = tf.assign(x_hat, x)
+    x_scale_resnet=((x_hat + 1.0) * 0.5) * 255.0 #重新从-1--1到0--255
+    x_resnet_0=x_scale_resnet[:,:,:,0]-_R_MEAN
+    x_resnet_1=x_scale_resnet[:,:,:,1]-_G_MEAN
+    x_resnet_2=x_scale_resnet[:,:,:,2]-_B_MEAN
+    x_resnet_input=tf.stack([x_resnet_0,x_resnet_1,x_resnet_2],3)
+
+    model=Resnet(nb_classes)
+    logits,probs=model.get_logits(x_resnet_input),model.get_probs(x_resnet_input)
+    saver = tf.train.Saver(slim.get_model_variables())
+    saver.restore(sess, FLAGS.checkpoint_path)
 
     learning_rate = tf.placeholder(tf.float32, ())
     y_hat = tf.placeholder(tf.int32, (batch_size,))
 
     labels = tf.one_hot(y_hat, nb_classes)
-    #对图片进行旋转 每张图生成5张旋转图，求平局的loss
-    num_samples = 5
-    average_loss = 0
-    for i in range(num_samples):
-        rotated = tf.contrib.image.rotate(
-            image, tf.random_uniform((), minval=-np.pi/4, maxval=np.pi/4))
-        rotated_logits=model.get_logits(rotated)
-        average_loss += tf.nn.softmax_cross_entropy_with_logits(logits=rotated_logits, labels=labels) / num_samples
-    #loss = tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=[labels])
-    optim_step = tf.train.GradientDescentOptimizer(learning_rate).minimize(average_loss, var_list=[x_hat])
+   
+    loss = tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=[labels])
+    optim_step = tf.train.GradientDescentOptimizer(learning_rate).minimize(loss, var_list=[x_hat])
 
     epsilon = tf.placeholder(tf.float32, ())
 
@@ -158,7 +160,7 @@ def main(_):
         for i in range(demo_steps):
             # gradient descent step
             _, loss_value = sess.run(
-                [optim_step, average_loss],
+                [optim_step, loss],
                 feed_dict={learning_rate: demo_lr, y_hat: tlabels})
             # project step
             sess.run(project_step, feed_dict={x: images, epsilon: demo_epsilon})
