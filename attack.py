@@ -111,7 +111,7 @@ def main(_):
     nb_classes = FLAGS.num_classes
 
     tf.logging.set_verbosity(tf.logging.INFO)
-
+    
     image=tf.Variable(tf.zeros(batch_shape))
     model=InceptionModel(nb_classes)
     logits,probs=model.get_logits(image),model.get_probs(image)
@@ -127,8 +127,16 @@ def main(_):
     y_hat = tf.placeholder(tf.int32, (batch_size,))
 
     labels = tf.one_hot(y_hat, nb_classes)
-    loss = tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=[labels])
-    optim_step = tf.train.GradientDescentOptimizer(learning_rate).minimize(loss, var_list=[x_hat])
+    #对图片进行旋转 每张图生成10张旋转图，求平局的loss
+    num_samples = 10
+    average_loss = 0
+    for i in range(num_samples):
+        rotated = tf.contrib.image.rotate(
+            image, tf.random_uniform((), minval=-np.pi/4, maxval=np.pi/4))
+        rotated_logits=model.get_logits(rotated)
+        average_loss += tf.nn.softmax_cross_entropy_with_logits(logits=rotated_logits, labels=labels) / num_samples
+    #loss = tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=[labels])
+    optim_step = tf.train.GradientDescentOptimizer(learning_rate).minimize(average_loss, var_list=[x_hat])
 
     epsilon = tf.placeholder(tf.float32, ())
 
@@ -140,8 +148,8 @@ def main(_):
 
 
     demo_epsilon = 16.0/255.0 # 一个很小的扰动
-    demo_lr = 1e-1
-    demo_steps = 50
+    demo_lr = 2e-1
+    demo_steps = 20
 
     for filenames, images, tlabels in load_images(FLAGS.input_dir, batch_shape):
         # initialization step #先初始化x_hat为x
@@ -150,7 +158,7 @@ def main(_):
         for i in range(demo_steps):
             # gradient descent step
             _, loss_value = sess.run(
-                [optim_step, loss],
+                [optim_step, average_loss],
                 feed_dict={learning_rate: demo_lr, y_hat: tlabels})
             # project step
             sess.run(project_step, feed_dict={x: images, epsilon: demo_epsilon})
