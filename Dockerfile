@@ -9,6 +9,7 @@ ADD . /competition
 
 WORKDIR /competition
 RUN pip install --upgrade pip
+RUN pip install --upgrade tensorflow-gpu==1.4.0
 RUN pip --no-cache-dir install  -r requirements.txt
 # INSTALL cleverhans foolbox
 
