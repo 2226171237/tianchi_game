@@ -1,3 +1,7 @@
 # tianchi_game
 
-images:0.07: attack resnet ,no rorate, eps=16/255,steps=20,le=2e-1
+* images:0.07: attack resnet ,no rorate, eps=16/255,steps=20,le=2e-1
+
+* images:0.10: attack resnet ,no rorate, eps=16/255,steps=20,le=2e-1 并将tensorflow升级到1.4.0版本
+
+
