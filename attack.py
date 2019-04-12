@@ -137,8 +137,18 @@ def main(_):
 
     labels = tf.one_hot(y_hat, nb_classes)
    
-    loss = tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=[labels])
-    optim_step = tf.train.GradientDescentOptimizer(learning_rate).minimize(loss, var_list=[x_hat])
+   ## rotate images 5 angles 
+    num_samples = 5
+    average_loss = 0
+    for i in range(num_samples):
+        rotated = tf.contrib.image.rotate(
+            image, tf.random_uniform((), minval=-np.pi/4, maxval=np.pi/4))
+        rotated_logits=model.get_logits(rotated)
+        average_loss += tf.nn.softmax_cross_entropy_with_logits(
+            logits=rotated_logits, labels=labels) / num_samples
+    
+    #loss = tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=[labels])
+    optim_step = tf.train.GradientDescentOptimizer(learning_rate).minimize(average_loss, var_list=[x_hat])
 
     epsilon = tf.placeholder(tf.float32, ())
 
@@ -160,7 +170,7 @@ def main(_):
         for i in range(demo_steps):
             # gradient descent step
             _, loss_value = sess.run(
-                [optim_step, loss],
+                [optim_step, average_loss],
                 feed_dict={learning_rate: demo_lr, y_hat: tlabels})
             # project step
             sess.run(project_step, feed_dict={x: images, epsilon: demo_epsilon})
