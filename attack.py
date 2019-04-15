@@ -90,7 +90,7 @@ class Resnet(Model):
         with slim.arg_scope(nets.resnet_v1.resnet_arg_scope()):
             logits, end_points = nets.resnet_v1.resnet_v1_50(
                 x_input, num_classes=self.nb_classes, is_training=False,
-                reuse=reuse)
+                reuse=reuse,scope='resnet_v1_50')
         self.built = True
         self.logits = logits
         # Strip off the extra reshape op at the output
@@ -156,11 +156,11 @@ def main(_):
     x_resnet_2=x_scale_resnet[:,:,:,2]-_B_MEAN
     x_resnet_input=tf.stack([x_resnet_0,x_resnet_1,x_resnet_2],3)
 
-    model_resnet=Resnet(batch_size)
-    model_vgg=Vgg_16(batch_size)
+    model_resnet=Resnet(nb_classes)
+    model_vgg=Vgg_16(nb_classes)
     logits_resnet,probs_resnet=model_resnet.get_logits(x_resnet_input),model_resnet.get_probs(x_resnet_input)
     logits_vgg=model_vgg.get_logits(x_resnet_input)
-    logits=logits_resnet+logits_vgg
+    logits=tf.reshape(logits_resnet,(-1,nb_classes))+logits_vgg
     saver1 = tf.train.Saver(slim.get_model_variables(scope='resnet_v1_50'))
     saver2 = tf.train.Saver(slim.get_model_variables(scope='vgg_16'))
     saver1.restore(sess, FLAGS.checkpoint_path_resnet)
