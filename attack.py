@@ -18,7 +18,9 @@ tf.logging.set_verbosity(tf.logging.ERROR)
 
 
 tf.flags.DEFINE_string(
-    'checkpoint_path', '', 'Path to checkpoint for inception network.')
+    'checkpoint_path_resnet', '', 'Path to checkpoint for resnet network.')
+tf.flags.DEFINE_string(
+    'checkpoint_path_vgg', '', 'Path to checkpoint for vgg network.')
 tf.flags.DEFINE_string(
     'input_dir', '', 'Input directory with images.')
 tf.flags.DEFINE_string(
@@ -103,6 +105,33 @@ class Resnet(Model):
 
     def get_probs(self, x_input):
         return self(x_input)
+#saver=tf.train.import_meta_graph('resnet_v1_50/model.ckpt-49800.meta')
+class Vgg_16(Model):
+    """Model class for CleverHans library."""
+    def __init__(self, nb_classes):
+        super(Vgg_16, self).__init__(nb_classes=nb_classes,
+                                             needs_dummy_fprop=True)
+        self.built = False
+
+    def __call__(self, x_input, return_logits=False):
+        """Constructs model and return probabilities for given input."""
+        reuse = True if self.built else None
+        with slim.arg_scope(nets.vgg.vgg_arg_scope()):
+            logits,_= nets.vgg.vgg_16(x_input, num_classes=self.nb_classes, is_training=False,scope='vgg_16')
+        self.built = True
+        self.logits = logits
+        # Strip off the extra reshape op at the output
+        self.probs = logits
+        if return_logits:
+            return self.logits
+        else:
+            return self.probs
+
+    def get_logits(self, x_input):
+        return self(x_input, return_logits=True)
+
+    def get_probs(self, x_input):
+        return self(x_input)
 
 def main(_):
 
@@ -127,28 +156,23 @@ def main(_):
     x_resnet_2=x_scale_resnet[:,:,:,2]-_B_MEAN
     x_resnet_input=tf.stack([x_resnet_0,x_resnet_1,x_resnet_2],3)
 
-    model=Resnet(nb_classes)
-    logits,probs=model.get_logits(x_resnet_input),model.get_probs(x_resnet_input)
-    saver = tf.train.Saver(slim.get_model_variables())
-    saver.restore(sess, FLAGS.checkpoint_path)
+    model_resnet=Resnet(batch_size)
+    model_vgg=Vgg_16(batch_size)
+    logits_resnet,probs_resnet=model_resnet.get_logits(x_resnet_input),model_resnet.get_probs(x_resnet_input)
+    logits_vgg=model_vgg.get_logits(x_resnet_input)
+    logits=logits_resnet+logits_vgg
+    saver1 = tf.train.Saver(slim.get_model_variables(scope='resnet_v1_50'))
+    saver2 = tf.train.Saver(slim.get_model_variables(scope='vgg_16'))
+    saver1.restore(sess, FLAGS.checkpoint_path_resnet)
+    saver2.restore(sess, FLAGS.checkpoint_path_vgg)
 
     learning_rate = tf.placeholder(tf.float32, ())
     y_hat = tf.placeholder(tf.int32, (batch_size,))
 
     labels = tf.one_hot(y_hat, nb_classes)
    
-   ## rotate images 5 angles 
-    num_samples = 5
-    average_loss = 0
-    for i in range(num_samples):
-        rotated = tf.contrib.image.rotate(
-            image, tf.random_uniform((), minval=-np.pi/4, maxval=np.pi/4))
-        rotated_logits=model.get_logits(rotated)
-        average_loss += tf.nn.softmax_cross_entropy_with_logits(
-            logits=rotated_logits, labels=labels) / num_samples
-    
-    #loss = tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=[labels])
-    optim_step = tf.train.GradientDescentOptimizer(learning_rate).minimize(average_loss, var_list=[x_hat])
+    loss = tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=[labels])
+    optim_step = tf.train.GradientDescentOptimizer(learning_rate).minimize(loss, var_list=[x_hat])
 
     epsilon = tf.placeholder(tf.float32, ())
 
@@ -170,7 +194,7 @@ def main(_):
         for i in range(demo_steps):
             # gradient descent step
             _, loss_value = sess.run(
-                [optim_step, average_loss],
+                [optim_step, loss],
                 feed_dict={learning_rate: demo_lr, y_hat: tlabels})
             # project step
             sess.run(project_step, feed_dict={x: images, epsilon: demo_epsilon})
