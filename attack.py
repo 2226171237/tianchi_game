@@ -183,8 +183,8 @@ def main(_):
         project_step = tf.assign(x_hat, projected)
 
 
-    demo_epsilon = 16.0/255.0 # 一个很小的扰动
-    demo_lr = 2e-1
+    demo_epsilon = 8.0/255.0 # 一个很小的扰动
+    demo_lr = 1e-1
     demo_steps = 20
 
     for filenames, images, tlabels in load_images(FLAGS.input_dir, batch_shape):
