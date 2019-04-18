@@ -195,7 +195,7 @@ def main(_):
     logits_vgg=model_vgg.get_logits(x_resnet_input)
 
     #模型融合
-    logits=(tf.reshape(logits_resnet,(-1,nb_classes))+logits_vgg+logits_inception)
+    logits=(tf.reshape(logits_resnet,(-1,nb_classes))+logits_vgg+logits_inception)/3.0
 
     #加载模型
     saver0 = tf.train.Saver(slim.get_model_variables(scope='InceptionV1'))
