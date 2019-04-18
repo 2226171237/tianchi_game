@@ -18,6 +18,8 @@ tf.logging.set_verbosity(tf.logging.ERROR)
 
 
 tf.flags.DEFINE_string(
+    'checkpoint_path_inception', '', 'Path to checkpoint for inception network.')
+tf.flags.DEFINE_string(
     'checkpoint_path_resnet', '', 'Path to checkpoint for resnet network.')
 tf.flags.DEFINE_string(
     'checkpoint_path_vgg', '', 'Path to checkpoint for vgg network.')
@@ -76,6 +78,34 @@ def save_images(images, filenames, output_dir):
 
 #saver=tf.train.import_meta_graph('resnet_v1_50/model.ckpt-49800.meta')
 #saver=tf.train.import_meta_graph('resnet_v1_50/model.ckpt-49800.meta')
+class InceptionModel(Model):
+    """Model class for CleverHans library."""
+    def __init__(self, nb_classes):
+        super(InceptionModel, self).__init__(nb_classes=nb_classes,
+                                             needs_dummy_fprop=True)
+        self.built = False
+
+    def __call__(self, x_input, return_logits=False):
+        """Constructs model and return probabilities for given input."""
+        reuse = True if self.built else None
+        with slim.arg_scope(inception.inception_v1_arg_scope()):
+            _, end_points = inception.inception_v1(
+                x_input, num_classes=self.nb_classes, is_training=False,
+                reuse=reuse,scope='InceptionV1')
+        self.built = True
+        self.logits = end_points['Logits']
+        # Strip off the extra reshape op at the output
+        self.probs = end_points['Predictions'].op.inputs[0]
+        if return_logits:
+            return self.logits
+        else:
+            return self.probs
+
+    def get_logits(self, x_input):
+        return self(x_input, return_logits=True)
+
+    def get_probs(self, x_input):
+        return self(x_input)
 
 class Resnet(Model):
     """Model class for CleverHans library."""
@@ -156,13 +186,23 @@ def main(_):
     x_resnet_2=x_scale_resnet[:,:,:,2]-_B_MEAN
     x_resnet_input=tf.stack([x_resnet_0,x_resnet_1,x_resnet_2],3)
 
+    model_inception=InceptionModel(nb_classes)
     model_resnet=Resnet(nb_classes)
     model_vgg=Vgg_16(nb_classes)
-    logits_resnet,probs_resnet=model_resnet.get_logits(x_resnet_input),model_resnet.get_probs(x_resnet_input)
+
+    logits_resnet=model_resnet.get_logits(x_resnet_input)
+    logits_inception=model_inception.get_logits(image)
     logits_vgg=model_vgg.get_logits(x_resnet_input)
-    logits=(tf.reshape(logits_resnet,(-1,nb_classes))+logits_vgg)
+
+    #模型融合
+    logits=(tf.reshape(logits_resnet,(-1,nb_classes))+logits_vgg+logits_inception)
+
+    #加载模型
+    saver0 = tf.train.Saver(slim.get_model_variables(scope='InceptionV1'))
     saver1 = tf.train.Saver(slim.get_model_variables(scope='resnet_v1_50'))
     saver2 = tf.train.Saver(slim.get_model_variables(scope='vgg_16'))
+
+    saver0.restore(sess, FLAGS.checkpoint_path_inception)
     saver1.restore(sess, FLAGS.checkpoint_path_resnet)
     saver2.restore(sess, FLAGS.checkpoint_path_vgg)
 
@@ -185,7 +225,7 @@ def main(_):
 
     demo_epsilon = 32.0/255.0 # 一个很小的扰动
     demo_lr = 2e-1
-    demo_steps = 40
+    demo_steps =20
 
     for filenames, images, tlabels in load_images(FLAGS.input_dir, batch_shape):
         # initialization step #先初始化x_hat为x

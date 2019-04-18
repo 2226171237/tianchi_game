@@ -14,5 +14,6 @@ OUTPUT_DIR=$2
 python attack.py \
   --input_dir="${INPUT_DIR}" \
   --output_dir="${OUTPUT_DIR}" \
+  --checkpoint_path_inception=./models/inception_v1/inception_v1.ckpt \
   --checkpoint_path_resnet=./models/resnet_v1_50/model.ckpt-49800 \
   --checkpoint_path_vgg=./models/vgg_16/vgg_16.ckpt
