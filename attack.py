@@ -160,7 +160,7 @@ def main(_):
     model_vgg=Vgg_16(nb_classes)
     logits_resnet,probs_resnet=model_resnet.get_logits(x_resnet_input),model_resnet.get_probs(x_resnet_input)
     logits_vgg=model_vgg.get_logits(x_resnet_input)
-    logits=(tf.reshape(logits_resnet,(-1,nb_classes))+logits_vgg)/2.0
+    logits=(tf.reshape(logits_resnet,(-1,nb_classes))+logits_vgg)
     saver1 = tf.train.Saver(slim.get_model_variables(scope='resnet_v1_50'))
     saver2 = tf.train.Saver(slim.get_model_variables(scope='vgg_16'))
     saver1.restore(sess, FLAGS.checkpoint_path_resnet)
@@ -185,7 +185,7 @@ def main(_):
 
     demo_epsilon = 16.0/255.0 # 一个很小的扰动
     demo_lr = 2e-1
-    demo_steps = 20
+    demo_steps = 40
 
     for filenames, images, tlabels in load_images(FLAGS.input_dir, batch_shape):
         # initialization step #先初始化x_hat为x
