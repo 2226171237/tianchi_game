@@ -3,19 +3,17 @@
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
-import tensorflow as tf
-import tensorflow.contrib.slim as slim
-import tensorflow.contrib.slim.nets as nets
-from cleverhans.attacks import Model
-from tensorflow.contrib.slim.nets import inception
 import os
 import csv
+import numpy as np
+import tensorflow as tf
+from tensorflow.contrib.slim import nets
 from scipy.misc import imread
 from scipy.misc import imresize
+from cleverhans.attacks import MomentumIterativeMethod
+from cleverhans.attacks import Model
 from PIL import Image
-import numpy as np
-tf.logging.set_verbosity(tf.logging.ERROR)
-
+slim = tf.contrib.slim
 
 tf.flags.DEFINE_string(
     'checkpoint_path_inception', '', 'Path to checkpoint for inception network.')
@@ -36,6 +34,7 @@ tf.flags.DEFINE_integer(
 tf.flags.DEFINE_integer(
     'num_classes', 110, 'Number of Classes')
 FLAGS = tf.flags.FLAGS
+
 
 def load_images(input_dir, batch_shape):
     images = np.zeros(batch_shape)
@@ -76,8 +75,6 @@ def save_images(images, filenames, output_dir):
             Image.fromarray(r_img).save(f, format='PNG')
 
 
-#saver=tf.train.import_meta_graph('resnet_v1_50/model.ckpt-49800.meta')
-#saver=tf.train.import_meta_graph('resnet_v1_50/model.ckpt-49800.meta')
 class InceptionModel(Model):
     """Model class for CleverHans library."""
     def __init__(self, nb_classes):
@@ -88,10 +85,10 @@ class InceptionModel(Model):
     def __call__(self, x_input, return_logits=False):
         """Constructs model and return probabilities for given input."""
         reuse = True if self.built else None
-        with slim.arg_scope(inception.inception_v1_arg_scope()):
-            _, end_points = inception.inception_v1(
+        with slim.arg_scope(nets.inception.inception_v1_arg_scope()):
+            _, end_points = nets.inception.inception_v1(
                 x_input, num_classes=self.nb_classes, is_training=False,
-                reuse=reuse,scope='InceptionV1')
+                reuse=reuse)
         self.built = True
         self.logits = end_points['Logits']
         # Strip off the extra reshape op at the output
@@ -163,91 +160,81 @@ class Vgg_16(Model):
     def get_probs(self, x_input):
         return self(x_input)
 
+class EnsembleModel(Model):
+    '''
+    三个模型融合
+    '''
+    def __init__(self, nb_classes):
+        super(EnsembleModel, self).__init__(nb_classes=nb_classes,
+                                             needs_dummy_fprop=True)
+        self.built = False
+        self.inception_model=InceptionModel(nb_classes)
+        self.resnet_model=Resnet(nb_classes)
+        self.vgg_model=Vgg_16(nb_classes)
+        self.model_name=['inception','resnet','vgg']
+        self.n_classes=nb_classes
+
+    def init_input(self,x_input):
+        _R_MEAN = 123.68
+        _G_MEAN = 116.78
+        _B_MEAN = 103.94
+        x_scale=((x_input + 1.0) * 0.5) * 255.0 #重新从-1--1到0--255
+        temp0=x_scale[:,:,:,0]-_R_MEAN
+        temp1=x_scale[:,:,:,1]-_G_MEAN
+        temp2=x_scale[:,:,:,2]-_B_MEAN
+        x_init_input=tf.stack([temp0,temp1,temp2],3)
+        return x_init_input
+        
+    def __call__(self, x_input, return_logits=False):
+        
+        logits_inception=self.inception_model.get_logits(x_input)
+        x_init_input=self.init_input(x_input)
+        logits_resnet=self.resnet_model.get_logits(x_init_input)
+        logits_vgg=self.vgg_model.get_logits(x_init_input)
+        self.logits=(tf.reshape(logits_resnet,(-1,self.n_classes))+logits_vgg+logits_inception)/3.0
+        self.probs=tf.nn.softmax(self.logits)
+        if return_logits:
+            return self.logits
+        else:
+            return self.probs
+
+    def get_logits(self, x_input):
+        return self(x_input, return_logits=True)
+
+    def get_probs(self, x_input):
+        return self(x_input) 
+
+
 def main(_):
-
-    sess=tf.InteractiveSession(config=tf.ConfigProto(allow_soft_placement=True))
-
-    batch_shape= [FLAGS.batch_size, FLAGS.image_height, FLAGS.image_width, 3]
-    batch_size=FLAGS.batch_size
+    """Run the sample attack"""
+    batch_shape = [FLAGS.batch_size, FLAGS.image_height, FLAGS.image_width, 3]
     nb_classes = FLAGS.num_classes
-    _R_MEAN = 123.68
-    _G_MEAN = 116.78
-    _B_MEAN = 103.94
     tf.logging.set_verbosity(tf.logging.INFO)
-    
-    image=tf.Variable(tf.zeros(batch_shape))
-    x = tf.placeholder(tf.float32, (batch_shape))
 
-    x_hat = image # our trainable adversarial input
-    assign_op = tf.assign(x_hat, x)
-    x_scale_resnet=((x_hat + 1.0) * 0.5) * 255.0 #重新从-1--1到0--255
-    x_resnet_0=x_scale_resnet[:,:,:,0]-_R_MEAN
-    x_resnet_1=x_scale_resnet[:,:,:,1]-_G_MEAN
-    x_resnet_2=x_scale_resnet[:,:,:,2]-_B_MEAN
-    x_resnet_input=tf.stack([x_resnet_0,x_resnet_1,x_resnet_2],3)
+    with tf.Graph().as_default():
+        # Prepare graph
+        x_input = tf.placeholder(tf.float32, shape=batch_shape)
+        target_class_input = tf.placeholder(tf.int32, shape=[FLAGS.batch_size])
+        one_hot_target_class = tf.one_hot(target_class_input, nb_classes)
+        model = EnsembleModel(nb_classes)
+        # Run computation
+        with tf.Session(config=tf.ConfigProto(allow_soft_placement=True)) as sess:
+            mim = MomentumIterativeMethod(model, sess=sess)
+            attack_params = {"eps": 32.0 / 255.0, "eps_iter": 0.01, "clip_min": -1.0, "clip_max": 1.0, \
+                             "nb_iter": 20, "decay_factor": 1.0, "y_target": one_hot_target_class}
+            x_adv = mim.generate(x_input, **attack_params)
+            saver0 = tf.train.Saver(slim.get_model_variables(scope='InceptionV1'))
+            saver1 = tf.train.Saver(slim.get_model_variables(scope='resnet_v1_50'))
+            saver2 = tf.train.Saver(slim.get_model_variables(scope='vgg_16'))
+            saver0.restore(sess, FLAGS.checkpoint_path_inception)
+            saver1.restore(sess, FLAGS.checkpoint_path_resnet)
+            saver2.restore(sess, FLAGS.checkpoint_path_vgg)
 
-    model_inception=InceptionModel(nb_classes)
-    model_resnet=Resnet(nb_classes)
-    model_vgg=Vgg_16(nb_classes)
+            for filenames, images, tlabels in load_images(FLAGS.input_dir, batch_shape):
+                adv_images = sess.run(x_adv,
+                                      feed_dict={x_input: images, target_class_input: tlabels})
+                save_images(adv_images, filenames, FLAGS.output_dir)
 
-    logits_resnet=model_resnet.get_logits(x_resnet_input)
-    logits_inception=model_inception.get_logits(image)
-    logits_vgg=model_vgg.get_logits(x_resnet_input)
-
-    #模型融合
-    logits=(tf.reshape(logits_resnet,(-1,nb_classes))+logits_vgg+logits_inception)/3.0
-
-    #加载模型
-    saver0 = tf.train.Saver(slim.get_model_variables(scope='InceptionV1'))
-    saver1 = tf.train.Saver(slim.get_model_variables(scope='resnet_v1_50'))
-    saver2 = tf.train.Saver(slim.get_model_variables(scope='vgg_16'))
-
-    saver0.restore(sess, FLAGS.checkpoint_path_inception)
-    saver1.restore(sess, FLAGS.checkpoint_path_resnet)
-    saver2.restore(sess, FLAGS.checkpoint_path_vgg)
-
-    learning_rate = tf.placeholder(tf.float32, ())
-    y_hat = tf.placeholder(tf.int32, (batch_size,))
-    #momentum=0.5
-    labels = tf.one_hot(y_hat, nb_classes)
-   
-    loss = tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=[labels])
-
-    optim_step = tf.train.GradientDescentOptimizer(learning_rate).minimize(loss, var_list=[x_hat])
-
-
-    #optim_step = tf.train.MomentumOptimizer(learning_rate,momentum).minimize(loss, var_list=[x_hat])
-    #init_op=tf.global_variables_initializer()
-
-    epsilon = tf.placeholder(tf.float32, ())
-
-    below = x - epsilon
-    above = x + epsilon
-    projected = tf.clip_by_value(tf.clip_by_value(x_hat, below, above), -1, 1)#clip x_hat,并将其约束到0，1之间作为输入。
-    with tf.control_dependencies([projected]):#此函数指定某些操作执行的依赖关系，即执行完projected,才能再执行project_step
-        project_step = tf.assign(x_hat, projected)
-
-
-    demo_epsilon = 32.0/255.0 # 一个很小的扰动
-    demo_lr = 6e-1
-    demo_steps =80
-
-    #sess.run(init_op)
-    for filenames, images, tlabels in load_images(FLAGS.input_dir, batch_shape):
-        # initialization step #先初始化x_hat为x
-        sess.run(assign_op, feed_dict={x: images})
-        # projected gradient descent
-        for i in range(demo_steps):
-            # gradient descent step
-            _, loss_value = sess.run(
-                [optim_step, loss],
-                feed_dict={learning_rate: demo_lr, y_hat: tlabels})
-            # project step
-            sess.run(project_step, feed_dict={x: images, epsilon: demo_epsilon})
-        adv = x_hat.eval() # retrieve the adversarial example
-        #classify(adv,tlabels)
-        save_images(adv,filenames,FLAGS.output_dir)
-
-if __name__=='__main__':
+if __name__ == '__main__':
     tf.app.run()
-
+    
