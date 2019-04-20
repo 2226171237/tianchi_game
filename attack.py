@@ -208,11 +208,15 @@ def main(_):
 
     learning_rate = tf.placeholder(tf.float32, ())
     y_hat = tf.placeholder(tf.int32, (batch_size,))
-
+    #momentum=0.5
     labels = tf.one_hot(y_hat, nb_classes)
    
     loss = tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=[labels])
     optim_step = tf.train.GradientDescentOptimizer(learning_rate).minimize(loss, var_list=[x_hat])
+
+
+    #optim_step = tf.train.MomentumOptimizer(learning_rate,momentum).minimize(loss, var_list=[x_hat])
+    #init_op=tf.global_variables_initializer()
 
     epsilon = tf.placeholder(tf.float32, ())
 
@@ -223,10 +227,11 @@ def main(_):
         project_step = tf.assign(x_hat, projected)
 
 
-    demo_epsilon = 32.0/255.0 # 一个很小的扰动
-    demo_lr = 2e-1
-    demo_steps =20
+    demo_epsilon = 16.0/255.0 # 一个很小的扰动
+    demo_lr = 3e-1
+    demo_steps =50
 
+    #sess.run(init_op)
     for filenames, images, tlabels in load_images(FLAGS.input_dir, batch_shape):
         # initialization step #先初始化x_hat为x
         sess.run(assign_op, feed_dict={x: images})
