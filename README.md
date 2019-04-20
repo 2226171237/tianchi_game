@@ -7,3 +7,4 @@
 * images:0.13: attack resnet and vgg ,no rotate ,eps=16/255,steps=40,le=2e-1,score：107.5490
 * images:0.14: attack resnet and vgg ,no rotate ,eps=32/255,steps=40,le=2e-1,score：107.4120
 * images:0.15: attack reset,vgg and inception,eps=16/255,steps=50,lr=3e-1 ,logits average ,score：105.0430
+* images:0.16: attack reset,vgg and inception,eps=16/255,steps=50,lr=5e-1 ,logits average ,score：
