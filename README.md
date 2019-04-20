@@ -9,3 +9,7 @@
 * images:0.15: attack resnet,vgg and inception,eps=16/255,steps=50,lr=3e-1 ,logits average ,score：105.0430
 * images:0.16: attack resnet,vgg and inception,eps=16/255,steps=50,lr=5e-1 ,logits average ,score：103.8740
 * images:0.17: attack resnet,vgg and inception,eps=32/255,steps=80,lr=6e-1 ,logits average ,score：100.0830
+* images:0.18: attack resnet,vgg and inception,use cleverhans MomentumIterativeMethod 
+attack_params = {"eps": 32.0 / 255.0, "eps_iter": 0.01, "clip_min": -1.0, "clip_max": 1.0, \
+                             "nb_iter": 20, "decay_factor": 1.0, "y_target": one_hot_target_class}
+                             score:
