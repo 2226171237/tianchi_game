@@ -212,6 +212,7 @@ def main(_):
     labels = tf.one_hot(y_hat, nb_classes)
    
     loss = tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=[labels])
+
     optim_step = tf.train.GradientDescentOptimizer(learning_rate).minimize(loss, var_list=[x_hat])
 
 
@@ -228,7 +229,7 @@ def main(_):
 
 
     demo_epsilon = 16.0/255.0 # 一个很小的扰动
-    demo_lr = 3e-1
+    demo_lr = 5e-1
     demo_steps =50
 
     #sess.run(init_op)
