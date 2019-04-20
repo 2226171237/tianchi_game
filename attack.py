@@ -228,9 +228,9 @@ def main(_):
         project_step = tf.assign(x_hat, projected)
 
 
-    demo_epsilon = 16.0/255.0 # 一个很小的扰动
-    demo_lr = 5e-1
-    demo_steps =50
+    demo_epsilon = 32.0/255.0 # 一个很小的扰动
+    demo_lr = 6e-1
+    demo_steps =80
 
     #sess.run(init_op)
     for filenames, images, tlabels in load_images(FLAGS.input_dir, batch_shape):
