@@ -13,3 +13,7 @@
 attack_params = {"eps": 32.0 / 255.0, "eps_iter": 0.01, "clip_min": -1.0, "clip_max": 1.0, \
                              "nb_iter": 20, "decay_factor": 1.0, "y_target": one_hot_target_class}
                              score: 92.0006
+* images:0.19: attack resnet,vgg and inception,use cleverhans MomentumIterativeMethod 
+attack_params = {"eps": 32.0 / 255.0, "eps_iter": 0.01, "clip_min": -1.0, "clip_max": 1.0, \
+                             "nb_iter": 15, "decay_factor": 1.0, "y_target": one_hot_target_class}
+                             score:

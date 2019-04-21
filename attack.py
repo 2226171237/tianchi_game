@@ -10,6 +10,7 @@ import tensorflow as tf
 from tensorflow.contrib.slim import nets
 from scipy.misc import imread
 from scipy.misc import imresize
+from cleverhans import attacks
 from cleverhans.attacks import MomentumIterativeMethod
 from cleverhans.attacks import Model
 from PIL import Image
@@ -220,8 +221,14 @@ def main(_):
         # Run computation
         with tf.Session(config=tf.ConfigProto(allow_soft_placement=True)) as sess:
             mim = MomentumIterativeMethod(model, sess=sess)
+            
+            '''
+            parse_params(eps=0.3, eps_iter=0.06, nb_iter=10, y=None, ord=inf, decay_factor=1.0,
+               clip_min=None, clip_max=None, y_target=None, sanity_checks=True, **kwargs)
+            '''
             attack_params = {"eps": 32.0 / 255.0, "eps_iter": 0.01, "clip_min": -1.0, "clip_max": 1.0, \
-                             "nb_iter": 20, "decay_factor": 1.0, "y_target": one_hot_target_class}
+                             "nb_iter": 15, "decay_factor": 1.0, "y_target": one_hot_target_class}
+            
             x_adv = mim.generate(x_input, **attack_params)
             saver0 = tf.train.Saver(slim.get_model_variables(scope='InceptionV1'))
             saver1 = tf.train.Saver(slim.get_model_variables(scope='resnet_v1_50'))
