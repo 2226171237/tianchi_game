@@ -12,6 +12,7 @@ from scipy.misc import imread
 from scipy.misc import imresize
 from cleverhans import attacks
 from cleverhans.attacks import MomentumIterativeMethod
+from cleverhans.attacks import SPSA
 from cleverhans.attacks import Model
 from PIL import Image
 slim = tf.contrib.slim
@@ -220,15 +221,24 @@ def main(_):
         model = EnsembleModel(nb_classes)
         # Run computation
         with tf.Session(config=tf.ConfigProto(allow_soft_placement=True)) as sess:
-            mim = MomentumIterativeMethod(model, sess=sess)
             
-            '''
-            parse_params(eps=0.3, eps_iter=0.06, nb_iter=10, y=None, ord=inf, decay_factor=1.0,
-               clip_min=None, clip_max=None, y_target=None, sanity_checks=True, **kwargs)
-            '''
-            attack_params = {"eps": 40.0 / 255.0, "eps_iter": 0.01, "clip_min": -1.0, "clip_max": 1.0, \
+            mim = MomentumIterativeMethod(model, sess=sess)
+    
+            #parse_params(eps=0.3, eps_iter=0.06, nb_iter=10, y=None, ord=inf, decay_factor=1.0,
+            #   clip_min=None, clip_max=None, y_target=None, sanity_checks=True, **kwargs)
+        
+            attack_params = {"eps": 0.2, "eps_iter": 0.01, "clip_min": -1.0, "clip_max": 1.0, \
                              "nb_iter": 15, "decay_factor": 1.0, "y_target": one_hot_target_class}
             
+            '''
+            mim=SPSA(model,sess=sess)
+            #parse_params(y=None, y_target=None, eps=None, clip_min=None, clip_max=None, nb_iter=None,
+            #                is_targeted=None, early_stop_loss_threshold=None, learning_rate=0.01, delta=0.01,
+            #                spsa_samples=128, batch_size=None, spsa_iters=1, is_debug=False, epsilon=None,
+            #                num_steps=None)
+            attack_params={"y_target":one_hot_target_class,"eps":32/255.0,"clip_min":-1.0,"clip_max":1.0,\
+                            "nb_iter":15,"spsa_samples":FLAGS.batch_size,"learning_rate":0.1}
+            '''
             x_adv = mim.generate(x_input, **attack_params)
             
             saver0 = tf.train.Saver(slim.get_model_variables(scope='InceptionV1'))
