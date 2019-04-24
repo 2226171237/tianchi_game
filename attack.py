@@ -233,7 +233,7 @@ def main(_):
             #   clip_min=None, clip_max=None, y_target=None, sanity_checks=True, **kwargs)
         
             attack_params = {"eps": 0.2, "eps_iter": 0.01, "clip_min": -1.0, "clip_max": 1.0, \
-                             "nb_iter": 15, "decay_factor": 1.0, "y_target": one_hot_target_class}
+                             "nb_iter": 10, "decay_factor": 1.0, "y_target": one_hot_target_class}
             
             #攻击方法2，ElasticNetMethod
            
@@ -242,7 +242,7 @@ def main(_):
             #            learning_rate=0.01, binary_search_steps=9, max_iterations=1000,abort_early=False, 
             #            initial_const=0.001, clip_min=0, clip_max=1)
             attack_params2={"y_target":one_hot_target_class,"beta":0.0,"clip_min":-1.0,"clip_max":1.0,\
-                            "max_iterations":5,"batch_size":FLAGS.batch_size,"learning_rate":0.1}
+                            "max_iterations":10,"batch_size":FLAGS.batch_size,"learning_rate":0.1}
             
            
             x_adv1= mim.generate(x_input, **attack_params) #第一生成阶段
@@ -262,7 +262,7 @@ def main(_):
                 adv_images = sess.run(x_adv2,
                                       feed_dict={x_input: adv_1,target_class_input: tlabels}) 
                 save_images(adv_images, filenames, FLAGS.output_dir)
-                
+
 if __name__ == '__main__':
     tf.app.run()
     
