@@ -13,6 +13,7 @@ from scipy.misc import imresize
 from cleverhans import attacks
 from cleverhans.attacks import MomentumIterativeMethod
 from cleverhans.attacks import ElasticNetMethod
+from cleverhans.attacks import ProjectedGradientDescent
 from cleverhans.attacks import Model
 from PIL import Image
 slim = tf.contrib.slim
@@ -235,14 +236,13 @@ def main(_):
             attack_params = {"eps": 0.2, "eps_iter": 0.01, "clip_min": -1.0, "clip_max": 1.0, \
                              "nb_iter": 10, "decay_factor": 1.0, "y_target": one_hot_target_class}
             
-            #攻击方法2，ElasticNetMethod
+            #攻击方法2，ProjectedGradientDescent
            
-            mim2=ElasticNetMethod(model,sess=sess)
-            #parse_params(y=None, y_target=None, beta=0.01, decision_rule=’EN’, batch_size=1, confidence=0, 
-            #            learning_rate=0.01, binary_search_steps=9, max_iterations=1000,abort_early=False, 
-            #            initial_const=0.001, clip_min=0, clip_max=1)
-            attack_params2={"y_target":one_hot_target_class,"beta":0.0,"clip_min":-1.0,"clip_max":1.0,\
-                            "max_iterations":10,"batch_size":FLAGS.batch_size,"learning_rate":0.1}
+            mim2=ProjectedGradientDescent(model,sess=sess)
+            #parse_params(eps=0.3, eps_iter=0.05, nb_iter=10, y=None, ord=inf, clip_min=None,
+            #              clip_max=None, y_target=None, rand_init=None, rand_minmax=0.3, sanity_checks=True, **kwargs)
+
+            attack_params2={"eps":0.3,"y_target":one_hot_target_class,"nb_iter":10,"clip_min":-1.0,"clip_max":1.0}
             
            
             x_adv1= mim.generate(x_input, **attack_params) #第一生成阶段
