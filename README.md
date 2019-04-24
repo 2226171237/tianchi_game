@@ -25,3 +25,10 @@ attack_params = {"eps": 40.0 / 255.0, "eps_iter": 0.01, "clip_min": -1.0, "clip_
 attack_params = {"eps": 0.2, "eps_iter": 0.01, "clip_min": -1.0, "clip_max": 1.0, \
                              "nb_iter": 15, "decay_factor": 1.0, "y_target": one_hot_target_class}
                              score:87.1428
+
+* images:0.22: attack resnet,vgg and inception,use cleverhans MomentumIterativeMethod first step,ElasticNetMethod second step,
+attack_params = {"eps": 0.2, "eps_iter": 0.01, "clip_min": -1.0, "clip_max": 1.0, \
+                             "nb_iter": 15, "decay_factor": 1.0, "y_target": one_hot_target_class}
+attack_params2={"y_target":one_hot_target_class,"beta":0.0,"clip_min":-1.0,"clip_max":1.0,\
+                            "max_iterations":5,"batch_size":FLAGS.batch_size,"learning_rate":0.1}
+                            score:

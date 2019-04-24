@@ -12,7 +12,7 @@ from scipy.misc import imread
 from scipy.misc import imresize
 from cleverhans import attacks
 from cleverhans.attacks import MomentumIterativeMethod
-from cleverhans.attacks import SPSA
+from cleverhans.attacks import ElasticNetMethod
 from cleverhans.attacks import Model
 from PIL import Image
 slim = tf.contrib.slim
@@ -188,13 +188,16 @@ class EnsembleModel(Model):
         return x_init_input
         
     def __call__(self, x_input, return_logits=False):
-        
-        logits_inception=self.inception_model.get_logits(x_input)
-        x_init_input=self.init_input(x_input)
-        logits_resnet=self.resnet_model.get_logits(x_init_input)
-        logits_vgg=self.vgg_model.get_logits(x_init_input)
-        self.logits=(tf.reshape(logits_resnet,(-1,self.n_classes))+logits_vgg+logits_inception)/3.0
-        self.probs=tf.nn.softmax(self.logits)
+
+        reuse = True if self.built else None
+        with tf.variable_scope('',reuse=reuse):
+            logits_inception=self.inception_model.get_logits(x_input)
+            x_init_input=self.init_input(x_input)
+            logits_resnet=self.resnet_model.get_logits(x_init_input)
+            logits_vgg=self.vgg_model.get_logits(x_init_input)
+            self.logits=(tf.reshape(logits_resnet,(-1,self.n_classes))+logits_vgg+logits_inception)/3.0
+            self.probs=tf.nn.softmax(self.logits)
+        self.built = True
         if return_logits:
             return self.logits
         else:
@@ -205,7 +208,6 @@ class EnsembleModel(Model):
 
     def get_probs(self, x_input):
         return self(x_input) 
-
 
 def main(_):
     """Run the sample attack"""
@@ -218,9 +220,12 @@ def main(_):
         x_input = tf.placeholder(tf.float32, shape=batch_shape)
         target_class_input = tf.placeholder(tf.int32, shape=[FLAGS.batch_size])
         one_hot_target_class = tf.one_hot(target_class_input, nb_classes)
+        
         model = EnsembleModel(nb_classes)
         # Run computation
         with tf.Session(config=tf.ConfigProto(allow_soft_placement=True)) as sess:
+            
+            #攻击方法1，MomentumIterativeMethod
             
             mim = MomentumIterativeMethod(model, sess=sess)
     
@@ -230,17 +235,20 @@ def main(_):
             attack_params = {"eps": 0.2, "eps_iter": 0.01, "clip_min": -1.0, "clip_max": 1.0, \
                              "nb_iter": 15, "decay_factor": 1.0, "y_target": one_hot_target_class}
             
-            '''
-            mim=SPSA(model,sess=sess)
-            #parse_params(y=None, y_target=None, eps=None, clip_min=None, clip_max=None, nb_iter=None,
-            #                is_targeted=None, early_stop_loss_threshold=None, learning_rate=0.01, delta=0.01,
-            #                spsa_samples=128, batch_size=None, spsa_iters=1, is_debug=False, epsilon=None,
-            #                num_steps=None)
-            attack_params={"y_target":one_hot_target_class,"eps":32/255.0,"clip_min":-1.0,"clip_max":1.0,\
-                            "nb_iter":15,"spsa_samples":FLAGS.batch_size,"learning_rate":0.1}
-            '''
-            x_adv = mim.generate(x_input, **attack_params)
+            #攻击方法2，ElasticNetMethod
+           
+            mim2=ElasticNetMethod(model,sess=sess)
+            #parse_params(y=None, y_target=None, beta=0.01, decision_rule=’EN’, batch_size=1, confidence=0, 
+            #            learning_rate=0.01, binary_search_steps=9, max_iterations=1000,abort_early=False, 
+            #            initial_const=0.001, clip_min=0, clip_max=1)
+            attack_params2={"y_target":one_hot_target_class,"beta":0.0,"clip_min":-1.0,"clip_max":1.0,\
+                            "max_iterations":5,"batch_size":FLAGS.batch_size,"learning_rate":0.1}
             
+           
+            x_adv1= mim.generate(x_input, **attack_params) #第一生成阶段
+
+            x_adv2=mim2.generate(x_input,**attack_params2) #第二生成阶段
+
             saver0 = tf.train.Saver(slim.get_model_variables(scope='InceptionV1'))
             saver1 = tf.train.Saver(slim.get_model_variables(scope='resnet_v1_50'))
             saver2 = tf.train.Saver(slim.get_model_variables(scope='vgg_16'))
@@ -249,10 +257,12 @@ def main(_):
             saver2.restore(sess, FLAGS.checkpoint_path_vgg)
 
             for filenames, images, tlabels in load_images(FLAGS.input_dir, batch_shape):
-                adv_images = sess.run(x_adv,
-                                      feed_dict={x_input: images, target_class_input: tlabels})
+                adv_1 = sess.run(x_adv1,
+                                      feed_dict={x_input: images,target_class_input: tlabels}) 
+                adv_images = sess.run(x_adv2,
+                                      feed_dict={x_input: adv_1,target_class_input: tlabels}) 
                 save_images(adv_images, filenames, FLAGS.output_dir)
-
+                
 if __name__ == '__main__':
     tf.app.run()
     
