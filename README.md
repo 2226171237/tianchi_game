@@ -31,7 +31,7 @@ attack_params = {"eps": 0.2, "eps_iter": 0.01, "clip_min": -1.0, "clip_max": 1.0
 attack_params = {"eps": 0.2, "eps_iter": 0.01, "clip_min": -1.0, "clip_max": 1.0, \
                              "nb_iter": 15, "decay_factor": 1.0, "y_target": one_hot_target_class}
 attack_params2={"eps":0.2,"y_target":one_hot_target_class,"nb_iter":20,"clip_min":-1.0,"clip_max":1.0}
-                            score:
+                            score: not work
 
 * images:0.23: attack resnet,vgg and inception,use cleverhans MomentumIterativeMethod ，其输入图为0.7*原图+0.3*目标类的图
 attack_params = {"eps": 0.2, "eps_iter": 0.01, "clip_min": -1.0, "clip_max": 1.0, \
