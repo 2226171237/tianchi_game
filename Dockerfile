@@ -11,6 +11,7 @@ WORKDIR /competition
 RUN pip install --upgrade pip
 #RUN pip install --upgrade tensorflow-gpu==1.4.0
 RUN pip --no-cache-dir install  -r requirements.txt
+RUN apt-get update
 RUN apt-get install -y git
 RUN pip install --upgrade git+https://github.com/tensorflow/cleverhans.git#egg=cleverhans
 # INSTALL cleverhans foolbox
