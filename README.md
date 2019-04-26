@@ -26,9 +26,13 @@ attack_params = {"eps": 0.2, "eps_iter": 0.01, "clip_min": -1.0, "clip_max": 1.0
                              "nb_iter": 15, "decay_factor": 1.0, "y_target": one_hot_target_class}
                              score:87.1428
 
-* images:0.22: attack resnet,vgg and inception,use cleverhans MomentumIterativeMethod first step,ElasticNetMethod second step,
+* 以下升级tensorflow到1.12.0，python为3.5，cleverhas为最新版。
+* images:0.22: attack resnet,vgg and inception,use cleverhans MomentumIterativeMethod + ProjectedGradientDescent将对抗样本相加求均值,
 attack_params = {"eps": 0.2, "eps_iter": 0.01, "clip_min": -1.0, "clip_max": 1.0, \
                              "nb_iter": 15, "decay_factor": 1.0, "y_target": one_hot_target_class}
-attack_params2={"y_target":one_hot_target_class,"beta":0.0,"clip_min":-1.0,"clip_max":1.0,\
-                            "max_iterations":5,"batch_size":FLAGS.batch_size,"learning_rate":0.1}
+attack_params2={"eps":0.2,"y_target":one_hot_target_class,"nb_iter":20,"clip_min":-1.0,"clip_max":1.0}
                             score:
+
+* images:0.23: attack resnet,vgg and inception,use cleverhans MomentumIterativeMethod ，其输入图为0.7*原图+0.3*目标类的图
+attack_params = {"eps": 0.2, "eps_iter": 0.01, "clip_min": -1.0, "clip_max": 1.0, \
+                             "nb_iter": 15, "decay_factor": 1.0, "y_target": one_hot_target_class}

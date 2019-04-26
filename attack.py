@@ -38,9 +38,10 @@ tf.flags.DEFINE_integer(
 FLAGS = tf.flags.FLAGS
 
 
-def load_images(input_dir, batch_shape):
+def load_images(input_dir, batch_shape): #del
     images = np.zeros(batch_shape)
-    labels = np.zeros(batch_shape[0], dtype=np.int32)
+    target_labels = np.zeros(batch_shape[0], dtype=np.int32)
+    true_labels = np.zeros(batch_shape[0], dtype=np.int32)
     filenames = []
     idx = 0
     batch_size = batch_shape[0]
@@ -53,17 +54,19 @@ def load_images(input_dir, batch_shape):
                 image = imresize(raw_image, [FLAGS.image_height, FLAGS.image_width]) / 255.0
             # Images for inception classifier are normalized to be in [-1, 1] interval.
             images[idx, :, :, :] = image * 2.0 - 1.0
-            labels[idx] = int(row['targetedLabel'])
+            target_labels[idx] = int(row['targetedLabel'])
+            true_labels[idx]=int(row['trueLabel'])
             filenames.append(os.path.basename(filepath))
             idx += 1
             if idx == batch_size:
-                yield filenames, images, labels
+                yield filenames, images, true_labels,target_labels
                 filenames = []
                 images = np.zeros(batch_shape)
-                labels = np.zeros(batch_shape[0], dtype=np.int32)
+                target_labels = np.zeros(batch_shape[0], dtype=np.int32)
+                true_labels = np.zeros(batch_shape[0], dtype=np.int32)
                 idx = 0
         if idx > 0:
-            yield filenames, images, labels
+            yield filenames, images, true_labels,target_labels
 
 
 def save_images(images, filenames, output_dir):
@@ -209,11 +212,20 @@ class EnsembleModel(Model):
     def get_probs(self, x_input):
         return self(x_input) 
 
+def get_target_images(input_dir): 
+    images_dict=dict()
+    for filenames, images, true_label,tlabels in load_images(input_dir, (1,224,224,3)):
+        if true_label[0] not in images_dict:
+            images_dict.update({true_label[0]:images[0]})
+    return images_dict
+
 def main(_):
     """Run the sample attack"""
     batch_shape = [FLAGS.batch_size, FLAGS.image_height, FLAGS.image_width, 3]
     nb_classes = FLAGS.num_classes
     tf.logging.set_verbosity(tf.logging.INFO)
+
+    images_dict=get_target_images('./dev_data')
 
     with tf.Graph().as_default():
         # Prepare graph
@@ -235,18 +247,9 @@ def main(_):
             attack_params = {"eps": 0.2, "eps_iter": 0.01, "clip_min": -1.0, "clip_max": 1.0, \
                              "nb_iter": 20, "decay_factor": 1.0, "y_target": one_hot_target_class}
             
-            #攻击方法2，ProjectedGradientDescent
+        
            
-            mim2=ProjectedGradientDescent(model,sess=sess)
-            #parse_params(eps=0.3, eps_iter=0.05, nb_iter=10, y=None, ord=inf, clip_min=None,
-            #              clip_max=None, y_target=None, rand_init=None, rand_minmax=0.3, sanity_checks=True, **kwargs)
-            attack_params2={"eps":0.2,"y_target":one_hot_target_class,"nb_iter":20,"clip_min":-1.0,"clip_max":1.0}
-            
-           
-            x_adv1= mim.generate(x_input, **attack_params) #第一生成阶段
-
-            x_adv2=mim2.generate(x_input,**attack_params2) #第二生成阶段
-
+            x_adv= mim.generate(x_input, **attack_params) 
             
             saver0 = tf.train.Saver(slim.get_model_variables(scope='InceptionV1'))
             saver1 = tf.train.Saver(slim.get_model_variables(scope='resnet_v1_50'))
@@ -255,12 +258,11 @@ def main(_):
             saver1.restore(sess, FLAGS.checkpoint_path_resnet)
             saver2.restore(sess, FLAGS.checkpoint_path_vgg)
 
-            for filenames, images, tlabels in load_images(FLAGS.input_dir, batch_shape):
-                adv_1 = sess.run(x_adv1,
-                                      feed_dict={x_input: images,target_class_input: tlabels}) 
-                adv_2 = sess.run(x_adv2,
-                                      feed_dict={x_input: images,target_class_input: tlabels}) 
-                adv_images=(adv_1+adv_2)/2.0           
+            for filenames, images,true_label,tlabels in load_images(FLAGS.input_dir, batch_shape):
+                for i in range(len(filenames)):
+                    images[i,:,:,:]=np.clip(0.7*images[i,:,:,:]+0.3*images_dict[tlabels[i]],-1.0,1.0)
+                adv_images = sess.run(x_adv,
+                                      feed_dict={x_input: images,target_class_input: tlabels})      
                 save_images(adv_images, filenames, FLAGS.output_dir)
 
 if __name__ == '__main__':
