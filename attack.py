@@ -233,20 +233,21 @@ def main(_):
             #   clip_min=None, clip_max=None, y_target=None, sanity_checks=True, **kwargs)
         
             attack_params = {"eps": 0.2, "eps_iter": 0.01, "clip_min": -1.0, "clip_max": 1.0, \
-                             "nb_iter": 12, "decay_factor": 1.0, "y_target": one_hot_target_class}
+                             "nb_iter": 20, "decay_factor": 1.0, "y_target": one_hot_target_class}
             
             #攻击方法2，ProjectedGradientDescent
            
             mim2=ProjectedGradientDescent(model,sess=sess)
             #parse_params(eps=0.3, eps_iter=0.05, nb_iter=10, y=None, ord=inf, clip_min=None,
             #              clip_max=None, y_target=None, rand_init=None, rand_minmax=0.3, sanity_checks=True, **kwargs)
-            attack_params2={"eps":0.2,"y_target":one_hot_target_class,"nb_iter":4,"clip_min":-1.0,"clip_max":1.0}
+            attack_params2={"eps":0.2,"y_target":one_hot_target_class,"nb_iter":20,"clip_min":-1.0,"clip_max":1.0}
             
            
             x_adv1= mim.generate(x_input, **attack_params) #第一生成阶段
 
             x_adv2=mim2.generate(x_input,**attack_params2) #第二生成阶段
 
+            
             saver0 = tf.train.Saver(slim.get_model_variables(scope='InceptionV1'))
             saver1 = tf.train.Saver(slim.get_model_variables(scope='resnet_v1_50'))
             saver2 = tf.train.Saver(slim.get_model_variables(scope='vgg_16'))
@@ -257,8 +258,9 @@ def main(_):
             for filenames, images, tlabels in load_images(FLAGS.input_dir, batch_shape):
                 adv_1 = sess.run(x_adv1,
                                       feed_dict={x_input: images,target_class_input: tlabels}) 
-                adv_images = sess.run(x_adv2,
-                                      feed_dict={x_input: adv_1,target_class_input: tlabels}) 
+                adv_2 = sess.run(x_adv2,
+                                      feed_dict={x_input: images,target_class_input: tlabels}) 
+                adv_images=(adv_1+adv_2)/2.0           
                 save_images(adv_images, filenames, FLAGS.output_dir)
 
 if __name__ == '__main__':
