@@ -93,7 +93,7 @@ class InceptionModel(Model):
         with slim.arg_scope(nets.inception.inception_v1_arg_scope()):
             _, end_points = nets.inception.inception_v1(
                 x_input, num_classes=self.nb_classes, is_training=False,
-                reuse=reuse,scope='InceptionV1'))
+                reuse=reuse,scope='InceptionV1')
         self.built = True
         self.logits = end_points['Logits']
         # Strip off the extra reshape op at the output
