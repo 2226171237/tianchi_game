@@ -93,7 +93,7 @@ class InceptionModel(Model):
         with slim.arg_scope(nets.inception.inception_v1_arg_scope()):
             _, end_points = nets.inception.inception_v1(
                 x_input, num_classes=self.nb_classes, is_training=False,
-                reuse=reuse)
+                reuse=reuse,scope='InceptionV1'))
         self.built = True
         self.logits = end_points['Logits']
         # Strip off the extra reshape op at the output
@@ -245,7 +245,7 @@ def main(_):
             #   clip_min=None, clip_max=None, y_target=None, sanity_checks=True, **kwargs)
         
             attack_params = {"eps": 0.2, "eps_iter": 0.01, "clip_min": -1.0, "clip_max": 1.0, \
-                             "nb_iter": 20, "decay_factor": 1.0, "y_target": one_hot_target_class}
+                             "nb_iter": 14, "decay_factor": 1.0, "y_target": one_hot_target_class}
             
         
            
