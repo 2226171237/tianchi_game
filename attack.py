@@ -12,7 +12,7 @@ from scipy.misc import imread
 from scipy.misc import imresize
 from cleverhans import attacks
 from cleverhans.attacks import MomentumIterativeMethod
-from cleverhans.attacks import ProjectedGradientDescent
+from cleverhans.attacks import SPSA
 from cleverhans.attacks import Model
 from PIL import Image
 slim = tf.contrib.slim
@@ -32,16 +32,14 @@ tf.flags.DEFINE_integer(
 tf.flags.DEFINE_integer(
     'image_height', 224, 'Height of each input images.')
 tf.flags.DEFINE_integer(
-    'batch_size', 11, 'How many images process at one time.')
+    'batch_size', 16, 'How many images process at one time.')
 tf.flags.DEFINE_integer(
     'num_classes', 110, 'Number of Classes')
 FLAGS = tf.flags.FLAGS
 
-
-def load_images(input_dir, batch_shape): #del
+def load_images(input_dir, batch_shape):
     images = np.zeros(batch_shape)
-    target_labels = np.zeros(batch_shape[0], dtype=np.int32)
-    true_labels = np.zeros(batch_shape[0], dtype=np.int32)
+    labels = np.zeros(batch_shape[0], dtype=np.int32)
     filenames = []
     idx = 0
     batch_size = batch_shape[0]
@@ -54,20 +52,17 @@ def load_images(input_dir, batch_shape): #del
                 image = imresize(raw_image, [FLAGS.image_height, FLAGS.image_width]) / 255.0
             # Images for inception classifier are normalized to be in [-1, 1] interval.
             images[idx, :, :, :] = image * 2.0 - 1.0
-            target_labels[idx] = int(row['targetedLabel'])
-            true_labels[idx]=int(row['trueLabel'])
+            labels[idx] = int(row['targetedLabel'])
             filenames.append(os.path.basename(filepath))
             idx += 1
             if idx == batch_size:
-                yield filenames, images, true_labels,target_labels
+                yield filenames, images, labels
                 filenames = []
                 images = np.zeros(batch_shape)
-                target_labels = np.zeros(batch_shape[0], dtype=np.int32)
-                true_labels = np.zeros(batch_shape[0], dtype=np.int32)
+                labels = np.zeros(batch_shape[0], dtype=np.int32)
                 idx = 0
         if idx > 0:
-            yield filenames, images, true_labels,target_labels
-
+            yield filenames, images, labels
 
 def save_images(images, filenames, output_dir):
     for i, filename in enumerate(filenames):
@@ -93,7 +88,7 @@ class InceptionModel(Model):
         with slim.arg_scope(nets.inception.inception_v1_arg_scope()):
             _, end_points = nets.inception.inception_v1(
                 x_input, num_classes=self.nb_classes, is_training=False,
-                reuse=reuse,scope='InceptionV1')
+                reuse=reuse)
         self.built = True
         self.logits = end_points['Logits']
         # Strip off the extra reshape op at the output
@@ -191,16 +186,13 @@ class EnsembleModel(Model):
         return x_init_input
         
     def __call__(self, x_input, return_logits=False):
-
-        reuse = True if self.built else None
-        with tf.variable_scope('',reuse=reuse):
-            logits_inception=self.inception_model.get_logits(x_input)
-            x_init_input=self.init_input(x_input)
-            logits_resnet=self.resnet_model.get_logits(x_init_input)
-            logits_vgg=self.vgg_model.get_logits(x_init_input)
-            self.logits=(tf.reshape(logits_resnet,(-1,self.n_classes))+logits_vgg+logits_inception)/3.0
-            self.probs=tf.nn.softmax(self.logits)
-        self.built = True
+        
+        logits_inception=self.inception_model.get_logits(x_input)
+        x_init_input=self.init_input(x_input)
+        logits_resnet=self.resnet_model.get_logits(x_init_input)
+        logits_vgg=self.vgg_model.get_logits(x_init_input)
+        self.logits=(tf.reshape(logits_resnet,(-1,self.n_classes))+logits_vgg+logits_inception)/3.0
+        self.probs=tf.nn.softmax(self.logits)
         if return_logits:
             return self.logits
         else:
@@ -212,27 +204,18 @@ class EnsembleModel(Model):
     def get_probs(self, x_input):
         return self(x_input) 
 
-def get_target_images(input_dir): 
-    images_dict=dict()
-    for filenames, images, true_label,tlabels in load_images(input_dir, (1,224,224,3)):
-        if true_label[0] not in images_dict:
-            images_dict.update({true_label[0]:images[0]})
-    return images_dict
-
 def main(_):
     """Run the sample attack"""
     batch_shape = [FLAGS.batch_size, FLAGS.image_height, FLAGS.image_width, 3]
     nb_classes = FLAGS.num_classes
     tf.logging.set_verbosity(tf.logging.INFO)
 
-    images_dict=get_target_images('./dev_data')
 
     with tf.Graph().as_default():
         # Prepare graph
         x_input = tf.placeholder(tf.float32, shape=batch_shape)
         target_class_input = tf.placeholder(tf.int32, shape=[FLAGS.batch_size])
         one_hot_target_class = tf.one_hot(target_class_input, nb_classes)
-        
         model = EnsembleModel(nb_classes)
         # Run computation
         with tf.Session(config=tf.ConfigProto(allow_soft_placement=True)) as sess:
@@ -244,12 +227,10 @@ def main(_):
             #parse_params(eps=0.3, eps_iter=0.06, nb_iter=10, y=None, ord=inf, decay_factor=1.0,
             #   clip_min=None, clip_max=None, y_target=None, sanity_checks=True, **kwargs)
         
-            attack_params = {"eps": 0.2, "eps_iter": 0.01, "clip_min": -1.0, "clip_max": 1.0, \
-                             "nb_iter": 5, "decay_factor": 1.0, "y_target": one_hot_target_class}
+            attack_params = {"eps": 0.3, "eps_iter": 0.01, "clip_min": -1.0, "clip_max": 1.0, \
+                             "nb_iter": 10, "decay_factor": 1.0, "y_target": one_hot_target_class}
             
-        
-           
-            x_adv= mim.generate(x_input, **attack_params) 
+            x_adv = mim.generate(x_input, **attack_params)
             
             saver0 = tf.train.Saver(slim.get_model_variables(scope='InceptionV1'))
             saver1 = tf.train.Saver(slim.get_model_variables(scope='resnet_v1_50'))
@@ -258,12 +239,11 @@ def main(_):
             saver1.restore(sess, FLAGS.checkpoint_path_resnet)
             saver2.restore(sess, FLAGS.checkpoint_path_vgg)
 
-            for filenames, images,true_label,tlabels in load_images(FLAGS.input_dir, batch_shape):
-                for i in range(len(filenames)):
-                    images[i,:,:,:]=np.clip(0.7*images[i,:,:,:]+0.3*images_dict[tlabels[i]],-1.0,1.0)
+            for filenames, images,tlabels in load_images(FLAGS.input_dir, batch_shape):
                 adv_images = sess.run(x_adv,
-                                      feed_dict={x_input: images,target_class_input: tlabels})      
+                                      feed_dict={x_input: images,target_class_input: tlabels})
                 save_images(adv_images, filenames, FLAGS.output_dir)
 
 if __name__ == '__main__':
     tf.app.run()
+    
