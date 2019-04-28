@@ -245,7 +245,7 @@ def main(_):
             #   clip_min=None, clip_max=None, y_target=None, sanity_checks=True, **kwargs)
         
             attack_params = {"eps": 0.2, "eps_iter": 0.01, "clip_min": -1.0, "clip_max": 1.0, \
-                             "nb_iter": 25, "decay_factor": 1.0, "y_target": one_hot_target_class}
+                             "nb_iter": 5, "decay_factor": 1.0, "y_target": one_hot_target_class}
             
         
            
